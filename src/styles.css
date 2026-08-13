@@ -715,6 +715,15 @@ h1 {
 .round-stats strong { color: var(--paper); font-size: 36px; }
 .round-stats small { color: #d8d2c8; font-size: 9px; }
 
+.round-screen.compact-card .timer { margin-top: 2px; padding-block: 4px 9px; }
+.round-screen.compact-card .timer div { font-size: clamp(52px, 17vw, 82px); }
+.round-screen.compact-card .word-card { gap: 4px; }
+.round-screen.compact-card .word-row { min-height: 42px; grid-template-columns: minmax(0, 1fr) 44px; gap: 4px; }
+.round-screen.compact-card .word-row button { padding: 5px 8px; font-size: clamp(15px, 4.5vw, 20px); }
+.round-screen.compact-card .word-pass { font-size: 19px !important; }
+.round-screen.compact-card .round-stats { padding-block: 4px; }
+.round-screen.compact-card .round-stats strong { font-size: 29px; }
+
 .time-up { color: var(--paper); background: var(--tomato); }
 .time-up h1 { font-size: clamp(100px, 28vw, 180px); text-shadow: 8px 8px 0 var(--ink); }
 .time-up p, .time-up small { color: var(--paper); font-weight: 700; }

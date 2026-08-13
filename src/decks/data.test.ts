@@ -2,9 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { decks } from './data'
 
 describe('official decks', () => {
-  it('provides at least 50 words in every deck and keeps metadata synchronized', () => {
+  it('provides 480 official words offline', () => {
+    expect(decks.reduce((total, deck) => total + deck.words.length, 0)).toBe(480)
+  })
+
+  it('provides at least 80 words in every deck and keeps metadata synchronized', () => {
     for (const deck of decks) {
-      expect(deck.words.length).toBeGreaterThanOrEqual(50)
+      expect(deck.words.length).toBeGreaterThanOrEqual(80)
       expect(deck.wordCount).toBe(deck.words.length)
     }
   })

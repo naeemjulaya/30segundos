@@ -18,7 +18,7 @@ export function createTeams(count: number, playerCount = 4): Team[] {
 
 export function defaultConfig(): GameConfig {
   return {
-    composition: 'balanced', durationSeconds: 30, wordsPerCard: 5,
+    composition: 'balanced', durationSeconds: 30, wordsPerCard: 8,
     passLimit: 2, passPenalty: false, targetScore: 40,
     victoryMode: 'points', roundLimit: 5, difficulty: 'mixed',
     selectedDeckIds: ['mocambique', 'futebol'],

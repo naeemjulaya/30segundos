@@ -29,7 +29,7 @@ describe('game engine', () => {
     expect(first.id).not.toBe(second.id)
     expect(first.status).toBe('setup')
     expect(first.teams).toHaveLength(3)
-    expect(first.config).toMatchObject({ durationSeconds: 30, wordsPerCard: 5, passLimit: 2, targetScore: 40 })
+    expect(first.config).toMatchObject({ durationSeconds: 30, wordsPerCard: 8, passLimit: 2, targetScore: 40 })
   })
 
   it('counts correct words and applies an optional pass penalty without going negative', () => {
