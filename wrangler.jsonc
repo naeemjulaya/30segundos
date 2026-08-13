@@ -1,0 +1,25 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "trinta-segundos-multiplayer",
+  "main": "cloudflare/worker.ts",
+  "compatibility_date": "2026-08-13",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "FRONTEND_ORIGIN": "https://30segundos.vercel.app"
+  },
+  "durable_objects": {
+    "bindings": [
+      { "name": "ROOMS", "class_name": "RoomDurableObject" },
+      { "name": "ANALYTICS", "class_name": "AnalyticsDurableObject" }
+    ]
+  },
+  "exports": {
+    "RoomDurableObject": { "type": "durable-object", "storage": "sqlite" },
+    "AnalyticsDurableObject": { "type": "durable-object", "storage": "sqlite" }
+  },
+  "observability": {
+    "enabled": true,
+    "logs": { "head_sampling_rate": 1 },
+    "traces": { "enabled": true, "head_sampling_rate": 0.05 }
+  }
+}

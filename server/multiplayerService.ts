@@ -21,7 +21,9 @@ export class MultiplayerService extends EventEmitter {
   private saveQueue = Promise.resolve()
   private timers = new Map<string, ReturnType<typeof setTimeout>>()
 
-  constructor(private filePath: string | null = null, private now = () => Date.now()) { super() }
+  constructor(private filePath: string | null = null, private now = () => Date.now(), private scheduleTimers = true) { super() }
+
+  restoreRoom(room: GameRoom) { this.rooms.set(room.code, room); return room }
 
   async load() {
     if (!this.filePath) return
@@ -43,8 +45,9 @@ export class MultiplayerService extends EventEmitter {
     }
   }
 
-  createRoom(name: string, mode: RoomMode, duelVariant: DuelVariant = 'ALTERNATING', maxPlayers = 8) {
-    const now = this.now(); const player = this.player(name, now); const code = this.code()
+  createRoom(name: string, mode: RoomMode, duelVariant: DuelVariant = 'ALTERNATING', maxPlayers = 8, preferredCode?: string) {
+    const now = this.now(); const player = this.player(name, now); const code = preferredCode ?? this.code()
+    if (this.rooms.has(code)) throw new MultiplayerError('ROOM_EXISTS', 'Esta sala já existe.')
     const room: GameRoom = {
       id: generateId(), code, hostId: player.id, status: 'WAITING', phase: 'LOBBY', mode, duelVariant,
       createdAt: now, updatedAt: now, expiresAt: now + ROOM_LIFETIME, maxPlayers: mode === 'DUEL' ? 2 : Math.max(2, Math.min(12, maxPlayers)),
@@ -112,6 +115,7 @@ export class MultiplayerService extends EventEmitter {
       room.pausedRemainingMs = Math.max(0, (room.roundEndsAt ?? this.now()) - this.now()); room.roundEndsAt = null; room.phase = 'PAUSED'
     }
     this.touch(room, 'player:disconnected', { playerId })
+    if (!this.scheduleTimers) return
     const key = `${code}:${playerId}`; clearTimeout(this.timers.get(key))
     this.timers.set(key, setTimeout(() => {
       const current = this.rooms.get(code); const missing = current?.players.find(value => value.id === playerId)
@@ -135,6 +139,27 @@ export class MultiplayerService extends EventEmitter {
   getRoom(code: string) { const key = code.trim().toUpperCase(); const room = this.rooms.get(key); if (room && room.expiresAt <= this.now()) { this.rooms.delete(key); return null } return room ?? null }
   listRooms() { return [...this.rooms.values()] }
   cleanupExpired() { const now = this.now(); for (const [code, room] of this.rooms) if (room.expiresAt <= now || room.status === 'CLOSED') this.rooms.delete(code); this.persist() }
+
+  processDue(room: GameRoom) {
+    let changed = false
+    if (room.phase === 'ROUND_ACTIVE' && room.roundEndsAt !== null && room.roundEndsAt <= this.now()) { this.endRound(room); changed = true }
+    const host = room.players.find(player => player.id === room.hostId)
+    if (host?.presence === 'DISCONNECTED' && this.now() - host.lastSeenAt >= HOST_GRACE) {
+      const successor = room.players.filter(player => player.id !== host.id && player.presence === 'CONNECTED').sort((a, b) => a.joinedAt - b.joinedAt)[0]
+      if (successor) { room.hostId = successor.id; changed = true }
+    }
+    if (room.expiresAt <= this.now()) { room.status = 'CLOSED'; changed = true }
+    if (changed) this.touch(room, 'room:updated')
+    return changed
+  }
+
+  nextDeadline(room: GameRoom) {
+    const deadlines = [room.expiresAt]
+    if (room.phase === 'ROUND_ACTIVE' && room.roundEndsAt !== null) deadlines.push(room.roundEndsAt)
+    const host = room.players.find(player => player.id === room.hostId)
+    if (host?.presence === 'DISCONNECTED') deadlines.push(host.lastSeenAt + HOST_GRACE)
+    return Math.min(...deadlines.filter(value => value > this.now()))
+  }
 
   private player(name: string, now: number) {
     const normalized = name.trim().slice(0, 30)
@@ -227,7 +252,7 @@ export class MultiplayerService extends EventEmitter {
   }
 
   private scheduleRoundEnd(room: GameRoom) {
-    if (!room.roundEndsAt) return
+    if (!this.scheduleTimers || !room.roundEndsAt) return
     const key = `${room.code}:round`; clearTimeout(this.timers.get(key))
     this.timers.set(key, setTimeout(() => { const current = this.rooms.get(room.code); if (current?.phase === 'ROUND_ACTIVE') { this.endRound(current); this.touch(current, 'round:ended') } }, Math.max(0, room.roundEndsAt - this.now()) + 50))
   }

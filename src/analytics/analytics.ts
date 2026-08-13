@@ -1,4 +1,5 @@
 import { generateId } from '../shared/generateId'
+import { backendUrl } from '../shared/backend'
 
 export const ADMIN_EMAIL = 'naeemjulaya7@gmail.com'
 const VISITOR_KEY = 'trinta-segundos:visitor-id'
@@ -49,7 +50,7 @@ export async function registerVisit(): Promise<AnalyticsSummary | null> {
   if (currentSession?.getItem(VISIT_RECORDED_KEY)) return null
   currentSession?.setItem(VISIT_RECORDED_KEY, '1')
   try {
-    const response = await fetch('/api/analytics/visit', {
+    const response = await fetch(backendUrl('/api/analytics/visit'), {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ visitorId: visitorId() }),
     })
@@ -62,7 +63,7 @@ export async function registerVisit(): Promise<AnalyticsSummary | null> {
 }
 
 export async function loadAnalytics(): Promise<AnalyticsSummary> {
-  const response = await fetch('/api/analytics/summary', { headers: { accept: 'application/json' } })
+  const response = await fetch(backendUrl('/api/analytics/summary'), { headers: { accept: 'application/json' } })
   if (!response.ok) throw new Error('Não foi possível carregar as estatísticas.')
   return await response.json() as AnalyticsSummary
 }

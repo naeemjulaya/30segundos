@@ -1,0 +1,8 @@
+{
+  "extends": "../tsconfig.app.json",
+  "compilerOptions": {
+    "types": ["../worker-configuration.d.ts", "@cloudflare/workers-types"],
+    "noEmit": true
+  },
+  "include": ["./**/*.ts", "../server/multiplayerService.ts", "../src/game/domain/**/*.ts", "../src/decks/**/*.ts", "../src/multiplayer/types.ts", "../src/shared/generateId.ts", "../worker-configuration.d.ts"]
+}

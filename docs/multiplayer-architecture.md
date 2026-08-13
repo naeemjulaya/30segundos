@@ -7,9 +7,9 @@ O modo local continua a chamar directamente o domínio puro e a persistir na Ind
 ```text
 Domínio único do jogo
 ├── modo local → React + IndexedDB, offline
-└── multiplayer → MultiplayerService autoritativo
-                    ├── WebSocketTransport (Internet ou LAN)
-                    └── persistência temporária rooms.json
+└── multiplayer → MultiplayerService autoritativo e partilhado
+                    ├── Node local → WebSocket + rooms.json
+                    └── Cloudflare → um Durable Object SQLite por sala
 ```
 
 ## Módulos
@@ -18,7 +18,8 @@ Domínio único do jogo
 - `src/multiplayer/transport.ts`: contrato `MultiplayerTransport`, WebSocket, fila, reconexão e credenciais locais;
 - `src/multiplayer/stateSync.ts`: aplicação testável de snapshots/patches, relógio e detecção de lacunas;
 - `server/multiplayerService.ts`: autorização, estado autoritativo, timers, pontuação, privacidade, reconexão e persistência;
-- `server.mjs`: HTTP, QR/deep link, upgrade WebSocket, heartbeat e difusão por papel;
+- `server.mjs`: backend integrado para desenvolvimento local;
+- `cloudflare/worker.ts`: backend de produção, Durable Objects, SQLite, alarms, WebSocket Hibernation, QR e analytics;
 - `src/ui/MultiplayerApp.tsx`: criação/entrada, lobby, equipas, duelo, ronda privada, revisão e classificação.
 
 ## Protocolo e redes lentas
@@ -37,7 +38,7 @@ O servidor valida host, pertença à sala, fase, explicador, palavra, prazo, pas
 
 Uma queda marca `DISCONNECTED` sem remover o jogador. Se for o explicador, a ronda guarda o tempo restante e pausa; ao regressar, continua o mesmo cartão. Depois de 15 segundos, o host pode encerrar a ronda pausada. Se o host não voltar, o servidor transfere deterministicamente o papel ao participante ligado há mais tempo.
 
-Salas são gravadas atomicamente em `.data/rooms.json` e expiram após seis horas sem actividade. Num reinício, todos regressam como desconectados e uma ronda que estava activa regressa pausada. Esta persistência em ficheiro é adequada ao MVP numa única instância. Escala horizontal exigirá armazenamento partilhado/pub-sub e encaminhamento consistente por sala.
+Localmente, salas são gravadas atomicamente em `.data/rooms.json`. Em produção, cada código é encaminhado deterministicamente para um Durable Object próprio, cujo SQLite guarda o estado autoritativo. WebSockets usam Hibernation e attachments para recuperar o jogador após o objecto sair da memória. Alarms encerram rondas, transferem o host e expiram salas sem depender de `setTimeout`. O frontend Vercel comunica directamente com o Worker através de CORS restrito ao domínio de produção.
 
 ## 1 vs 1
 
@@ -49,4 +50,4 @@ Uma PWA não consegue descobrir de forma portátil outros browsers na LAN nem ab
 
 ## Publicação
 
-Internet real requer uma instância pública que suporte processos Node persistentes e upgrade WebSocket, HTTPS/WSS e volume persistente para `.data`. Proxies devem encaminhar `/ws` com upgrade e preservar `Host`/`X-Forwarded-Proto`, para que o QR gere o domínio correcto. Hospedagem puramente estática não executa multiplayer.
+O frontend é publicado como Vite estático em `https://30segundos.vercel.app`. O backend é publicado pelo Wrangler em `https://trinta-segundos-multiplayer.mazzahub.workers.dev`. O build de produção possui esse endereço como fallback explícito; `VITE_BACKEND_ORIGIN` pode substituí-lo numa futura alteração de domínio. O QR continua a apontar para a rota `/join/CODE` do frontend.
