@@ -38,6 +38,14 @@ async function readJson(request) {
 
 async function handleApi(request, response) {
   const pathname = new URL(request.url ?? '/', 'http://localhost').pathname
+  const leaveMatch = pathname.match(/^\/api\/rooms\/([A-Z0-9]{4})\/leave$/)
+  if (leaveMatch && request.method === 'POST') {
+    const { playerId, sessionToken } = await readJson(request)
+    const resumed = multiplayer.resumeRoom(leaveMatch[1], playerId, sessionToken)
+    multiplayer.command(leaveMatch[1], playerId, { type: 'ROOM_LEAVE', actionId: `leave:${playerId}:${Date.now()}` })
+    json(response, 200, { ok: Boolean(resumed.credentials) })
+    return true
+  }
   const qrMatch = pathname.match(/^\/api\/rooms\/([A-Z0-9]{4})\/qr\.svg$/)
   if (qrMatch && request.method === 'GET') {
     if (!multiplayer.getRoom(qrMatch[1])) return json(response, 404, { error: 'Sala não encontrada.' })

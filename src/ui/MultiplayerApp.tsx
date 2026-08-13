@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Check, Copy, LogOut, RefreshCw, Share2, ShieldCheck, Shuffle, Users, Wifi, WifiOff, X } from 'lucide-react'
 import type { DuelVariant, RoomMode, RoomSnapshot, ServerMessage } from '../multiplayer/types'
-import { clearRoomCredentials, loadRoomCredentials, WebSocketTransport } from '../multiplayer/transport'
+import { loadRoomCredentials, WebSocketTransport } from '../multiplayer/transport'
 import { applyRoomUpdate } from '../multiplayer/stateSync'
 import { backendUrl } from '../shared/backend'
 
@@ -79,7 +79,7 @@ export function MultiplayerApp({ initialCode = '', onExit }: { initialCode?: str
     if (step === 'CREATE') send({ type: 'ROOM_CREATE', name, mode, duelVariant, maxPlayers: 8 })
     else send({ type: 'ROOM_JOIN', code, name })
   }
-  const leave = () => { send({ type: 'ROOM_LEAVE' }); clearRoomCredentials(); window.setTimeout(() => { transport.current.close(); onExit() }, 50) }
+  const leave = () => { transport.current.leave(); onExit() }
   const share = async () => {
     if (navigator.share) { try { await navigator.share({ title: `Sala ${room?.code}`, text: 'Entra na minha sala de Trinta Segundos', url: joinLink }); return } catch { /* fallback */ } }
     await copyText(joinLink)

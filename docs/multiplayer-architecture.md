@@ -30,6 +30,8 @@ O servidor envia `serverNow`, `roundEndsAt` e não envia contagens por segundo. 
 
 Para reduzir a latência percebida, acertos, passes e o indicador de pronto são apresentados de forma optimista no dispositivo que actuou. Isto não altera a autoridade: o servidor valida o comando, o patch seguinte reconcilia o cliente e qualquer rejeição provoca um `SYNC_STATE`. Criação e entrada mantêm confirmação autoritativa e mostram um estado de ligação para impedir pedidos duplicados.
 
+Ao abandonar uma sala, o cliente apaga primeiro as credenciais e regressa imediatamente ao menu. A remoção autoritativa segue por `POST /api/rooms/:code/leave` com `keepalive`, autenticada pelo `playerId` e `sessionToken`, para sobreviver ao fecho do componente ou à navegação. O servidor remove o participante, transfere o host quando necessário e actualiza os restantes sockets.
+
 ## Privacidade e autorização
 
 Durante `ROUND_ACTIVE`, apenas o snapshot do explicador contém `round.words`. Colegas e adversários recebem apenas equipa, explicador, estado e timestamps. Na revisão, todos recebem os resultados. Tokens de sessão e a lista de acções processadas nunca entram no snapshot público.

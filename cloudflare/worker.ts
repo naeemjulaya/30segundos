@@ -72,6 +72,17 @@ export class RoomDurableObject extends DurableObject<Env> {
     return { snapshot: this.service.snapshot(room, result.credentials.playerId), credentials: result.credentials }
   }
 
+  async leave(playerId: string, sessionToken: string) {
+    const room = this.requireRoom()
+    this.service.resumeRoom(room.code, playerId, sessionToken)
+    this.service.command(room.code, playerId, { type: 'ROOM_LEAVE', actionId: `leave:${playerId}:${Date.now()}` })
+    this.persist(); this.broadcast()
+    for (const socket of this.ctx.getWebSockets()) {
+      if ((socket.deserializeAttachment() as SocketAttachment | null)?.playerId === playerId) socket.close(1000, 'Jogador saiu')
+    }
+    return { ok: true }
+  }
+
   async fetch(request: Request): Promise<Response> {
     if (request.headers.get('Upgrade')?.toLowerCase() !== 'websocket') return new Response('Upgrade WebSocket obrigatório.', { status: 426 })
     const url = new URL(request.url); const playerId = url.searchParams.get('playerId') ?? ''; const token = url.searchParams.get('token') ?? ''
@@ -208,6 +219,11 @@ export default {
       if (joinMatch && request.method === 'POST') {
         const body = await boundedJson<{ name: string }>(request)
         return withCors(Response.json(await env.ROOMS.getByName(joinMatch[1]).join(body.name)), request, env)
+      }
+      const leaveMatch = url.pathname.match(/^\/api\/rooms\/([A-Z0-9]{4})\/leave$/)
+      if (leaveMatch && request.method === 'POST') {
+        const body = await boundedJson<{ playerId: string; sessionToken: string }>(request)
+        return withCors(Response.json(await env.ROOMS.getByName(leaveMatch[1]).leave(body.playerId, body.sessionToken)), request, env)
       }
       const wsMatch = url.pathname.match(/^\/ws\/([A-Z0-9]{4})$/)
       if (wsMatch) {

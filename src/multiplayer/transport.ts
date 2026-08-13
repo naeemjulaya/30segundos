@@ -5,6 +5,7 @@ import { backendUrl, backendWebSocketUrl } from '../shared/backend'
 export interface MultiplayerTransport {
   connect(): void
   send(command: CommandInput): void
+  leave(): void
   subscribe(listener: (message: ServerMessage) => void): () => void
   close(): void
 }
@@ -46,6 +47,24 @@ export class WebSocketTransport implements MultiplayerTransport {
     const message = JSON.stringify({ ...command, actionId: command.actionId ?? generateId() })
     if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(message)
     else this.queue.push(message)
+  }
+
+  leave() {
+    const credentials = loadRoomCredentials()
+    clearRoomCredentials()
+    this.closed = true
+    if (this.reconnectTimer) { clearTimeout(this.reconnectTimer); this.reconnectTimer = null }
+    this.queue = []
+    if (credentials) {
+      void fetch(backendUrl(`/api/rooms/${credentials.roomCode}/leave`), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ playerId: credentials.playerId, sessionToken: credentials.sessionToken }),
+        keepalive: true,
+      }).catch(() => undefined)
+    }
+    this.socket?.close()
+    this.socket = null
   }
 
   subscribe(listener: (message: ServerMessage) => void) { this.listeners.add(listener); return () => this.listeners.delete(listener) }
