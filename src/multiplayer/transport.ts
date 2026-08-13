@@ -81,6 +81,7 @@ export class WebSocketTransport implements MultiplayerTransport {
       const response = await fetch(backendUrl(endpoint), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
       const value = await response.json() as { snapshot?: RoomSnapshot; credentials?: RoomCredentials; error?: string; code?: string }
       if (!response.ok || !value.snapshot || !value.credentials) throw new Error(value.error ?? 'Não foi possível entrar na sala.')
+      if (this.closed) return
       if (this.reconnectTimer) { clearTimeout(this.reconnectTimer); this.reconnectTimer = null }
       const previousSocket = this.socket; this.socket = null; previousSocket?.close()
       saveRoomCredentials(value.credentials)
@@ -100,6 +101,7 @@ export class WebSocketTransport implements MultiplayerTransport {
       for (const message of this.queue.splice(0)) socket.send(message)
     })
     socket.addEventListener('message', event => {
+      if (this.closed || this.socket !== socket) return
       try {
         const message = JSON.parse(String(event.data)) as ServerMessage
         if (message.type === 'ROOM_STATE' && message.credentials) saveRoomCredentials(message.credentials)

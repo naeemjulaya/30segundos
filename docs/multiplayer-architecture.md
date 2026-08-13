@@ -31,6 +31,7 @@ O servidor envia `serverNow`, `roundEndsAt` e não envia contagens por segundo. 
 Para reduzir a latência percebida, acertos, passes e o indicador de pronto são apresentados de forma optimista no dispositivo que actuou. Isto não altera a autoridade: o servidor valida o comando, o patch seguinte reconcilia o cliente e qualquer rejeição provoca um `SYNC_STATE`. Criação e entrada mantêm confirmação autoritativa e mostram um estado de ligação para impedir pedidos duplicados.
 
 Ao abandonar uma sala, o cliente apaga primeiro as credenciais e regressa imediatamente ao menu. A remoção autoritativa segue por `POST /api/rooms/:code/leave` com `keepalive`, autenticada pelo `playerId` e `sessionToken`, para sobreviver ao fecho do componente ou à navegação. O servidor remove o participante, transfere o host quando necessário e actualiza os restantes sockets.
+Depois de a saída começar, o transporte também ignora respostas de criação/entrada e mensagens WebSocket que já estavam em trânsito. Assim, uma mensagem tardia nunca volta a guardar credenciais que acabaram de ser eliminadas.
 
 ## Privacidade e autorização
 
