@@ -563,6 +563,9 @@ h1 {
 .hero-card i, .solo-card i { width: 24px; height: 24px; border: 3px solid var(--ink); border-radius: 50%; background: var(--blue); box-shadow: none; }
 .bottom-stack { gap: 15px; }
 .home-screen .bottom-stack { position: relative; z-index: 2; flex: 0 0 auto; }
+.play-mode-label { margin: 0 0 -8px; color: var(--ink-soft); font-size: 9px; font-weight: 700; letter-spacing: .18em; text-align: center; text-transform: uppercase; }
+.multiplayer-cta { min-height: 58px; border: 2px solid var(--ink); color: var(--ink); background: var(--mustard); box-shadow: 4px 4px 0 var(--ink); font-family: 'Barlow Condensed'; font-size: 18px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.multiplayer-cta svg { width: 18px; vertical-align: middle; }
 .saved-game { grid-template-columns: 1fr 48px; border-style: dashed; box-shadow: none; }
 .saved-game > button:last-child { border-left: 2px solid var(--ink); color: var(--tomato); }
 .saved-game span, .saved-game b { color: var(--ink); }
@@ -882,6 +885,64 @@ h1 {
 .last-visit { margin: 18px 0; }
 .refresh-admin { margin-top: auto; }
 .refresh-admin svg { width: 17px; vertical-align: middle; }
+
+.multiplayer-entry, .lobby-screen, .multiplayer-turn, .multiplayer-review, .multiplayer-score, .multiplayer-finished { background: #e9e4dc; }
+.multiplayer-entry .screen-content, .lobby-screen .screen-content, .multiplayer-turn .screen-content, .multiplayer-review .screen-content, .multiplayer-score .screen-content, .multiplayer-finished .screen-content { width: min(100%, 760px); margin: auto; }
+.multiplayer-mark { display: flex; align-items: center; gap: 9px; margin-top: 70px; color: var(--blue); font-weight: 700; text-transform: uppercase; }
+.multiplayer-actions, .multiplayer-form { display: grid; gap: 18px; margin-top: 28px; }
+.multiplayer-form .text-field input { width: 100%; height: 58px; text-transform: uppercase; }
+.mode-choice { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.mode-choice button { min-height: 90px; display: grid; place-items: center; border: 2px solid var(--ink); color: var(--ink); background: var(--paper); font-weight: 700; }
+.mode-choice button.active { background: var(--mustard); box-shadow: 4px 4px 0 var(--ink); }
+.duel-variants { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.duel-variants button { min-height: 72px; padding: 9px; border: 2px solid var(--ink); color: var(--ink); background: var(--paper); font-weight: 800; }
+.duel-variants button.active { background: var(--blue); color: var(--paper); box-shadow: 3px 3px 0 var(--ink); }
+.duel-variants small { display: block; margin-top: 5px; font-size: 9px; font-weight: 500; }
+.lan-note { margin-top: auto; color: var(--ink-soft); font-size: 11px; text-align: center; }
+.room-header, .lobby-players header, .admin-header { display: flex; align-items: center; justify-content: space-between; }
+.room-header h1 { margin: 0; font-size: 74px; letter-spacing: .12em; }
+.room-header small { color: var(--ink-soft); text-transform: uppercase; }
+.room-header > button { border: 2px solid var(--ink); color: var(--paper); background: var(--tomato); }
+.invite-grid { display: grid; grid-template-columns: 130px 1fr; gap: 16px; margin: 12px 0 22px; padding: 14px; border: 3px solid var(--ink); background: var(--paper); box-shadow: 5px 5px 0 var(--ink); }
+.invite-grid img { width: 130px; height: 130px; }
+.invite-grid > div { min-width: 0; display: grid; align-content: center; gap: 8px; }
+.invite-grid b { overflow-wrap: anywhere; font-size: 10px; }
+.invite-grid button { padding: 7px; border: 2px solid var(--ink); color: var(--ink); background: var(--mustard); font-size: 11px; }
+.lobby-players { display: grid; gap: 7px; margin-bottom: 15px; }
+.lobby-players > header { padding-bottom: 8px; border-bottom: 3px solid var(--ink); }
+.lobby-players > div { min-height: 52px; display: grid; grid-template-columns: 32px minmax(0, 1fr) auto auto; align-items: center; gap: 5px; padding: 8px; border: 2px solid var(--ink); background: var(--paper); }
+.lobby-players em { color: var(--green); font-size: 10px; font-style: normal; font-weight: 700; }
+.lobby-players em svg, .presence svg { width: 14px; vertical-align: middle; }
+.presence.disconnected { color: var(--tomato); }
+.lobby-tip, .waiting-copy { color: var(--ink-soft); font-size: 12px; text-align: center; }
+.multiplayer-config { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; margin-bottom: 15px; }
+.multiplayer-config label { display: grid; gap: 4px; color: var(--ink-soft); font-size: 9px; font-weight: 700; text-transform: uppercase; }
+.multiplayer-config select, .lobby-players select { min-width: 0; padding: 7px; border: 2px solid var(--ink); color: var(--ink); background: var(--paper); font-weight: 700; }
+.remove-player { width: 30px; height: 30px; display: grid; place-items: center; border: 2px solid var(--ink); color: var(--paper); background: var(--tomato); }
+.remove-player svg { width: 14px; }
+.distribution-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.cancel-room { width: 100%; margin-top: 5px; color: var(--tomato); }
+.versus-card, .spectator-state { margin: auto 0; padding: 28px; border: 3px solid var(--ink); color: var(--ink); background: var(--mustard); box-shadow: 7px 7px 0 var(--ink); text-align: center; }
+.versus-card b { font: 700 30px 'Barlow Condensed'; text-transform: uppercase; }
+.multiplayer-turn .primary-button { margin-top: auto; }
+.multiplayer-round { color: var(--paper); background: var(--ink); }
+.network-timer { padding: 5px 10px; border: 3px solid var(--paper); box-shadow: 5px 5px 0 var(--blue); font: 700 clamp(66px, 20vw, 100px)/1 'Barlow Condensed'; text-align: center; }
+.multiplayer-word-list { display: grid; gap: 4px; margin-top: 12px; }
+.multiplayer-word-list > div { min-height: 42px; display: grid; grid-template-columns: 1fr 44px; gap: 4px; }
+.multiplayer-word-list button { border: 2px solid var(--paper); color: var(--paper); background: #2a2927; font: 700 clamp(15px, 4.5vw, 20px) 'Barlow Condensed'; text-transform: uppercase; }
+.multiplayer-word-list .correct button:first-child { background: var(--green); }
+.multiplayer-word-list .passed button:first-child { color: var(--ink); background: var(--mustard); text-decoration: line-through; }
+.spectator-state { margin: auto; color: var(--ink); }
+.connection-warning { padding: 10px; background: var(--tomato); font-weight: 700; }
+.multiplayer-review .review-list > div { grid-template-columns: minmax(0, 1fr) auto; }
+.multiplayer-review .review-list span { display: grid; }
+.multiplayer-review .review-list small { color: var(--ink-soft); font: 400 9px 'IBM Plex Sans'; }
+.multiplayer-review .review-list > div > button { width: auto; padding: 5px 8px; font-size: 10px; }
+.vote-buttons { display: flex; gap: 4px; }
+.host-tiebreak { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 5px; padding: 8px; border: 2px dashed var(--ink); }
+.host-tiebreak button { padding: 7px; border: 2px solid var(--ink); background: var(--mustard); }
+.score-row { min-height: 70px; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; margin: 8px 0; padding: 12px; border: 3px solid var(--ink); border-left: 16px solid var(--team, var(--blue)); background: var(--paper); box-shadow: 4px 4px 0 var(--ink); }
+.score-row strong { font: 700 40px 'Barlow Condensed'; }
 
 @media (min-width: 700px) {
   .phone-screen { min-height: 100vh; border: 0; border-radius: 0; box-shadow: none; }

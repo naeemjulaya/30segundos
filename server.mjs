@@ -4,6 +4,9 @@ import http from 'node:http'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createAnalyticsStore } from './server/analyticsStore.mjs'
+import QRCode from 'qrcode'
+import { WebSocketServer } from 'ws'
+import { MultiplayerError, MultiplayerService } from './server/multiplayerService.ts'
 
 const root = path.dirname(fileURLToPath(import.meta.url))
 const production = process.env.NODE_ENV === 'production'
@@ -12,6 +15,12 @@ const analyticsPath = process.env.ANALYTICS_DATA_PATH
   ? path.resolve(process.env.ANALYTICS_DATA_PATH)
   : path.join(root, '.data', 'analytics.json')
 const store = createAnalyticsStore(analyticsPath)
+const multiplayerPath = process.env.MULTIPLAYER_DATA_PATH
+  ? path.resolve(process.env.MULTIPLAYER_DATA_PATH)
+  : path.join(root, '.data', 'rooms.json')
+const multiplayer = new MultiplayerService(multiplayerPath)
+await multiplayer.load()
+setInterval(() => multiplayer.cleanupExpired(), 60_000).unref()
 
 function json(response, status, value) {
   response.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
@@ -29,6 +38,13 @@ async function readJson(request) {
 
 async function handleApi(request, response) {
   const pathname = new URL(request.url ?? '/', 'http://localhost').pathname
+  const qrMatch = pathname.match(/^\/api\/rooms\/([A-Z0-9]{4})\/qr\.svg$/)
+  if (qrMatch && request.method === 'GET') {
+    if (!multiplayer.getRoom(qrMatch[1])) return json(response, 404, { error: 'Sala não encontrada.' })
+    const origin = `${request.headers['x-forwarded-proto'] ?? 'http'}://${request.headers.host}`
+    const svg = await QRCode.toString(`${origin}/join/${qrMatch[1]}`, { type: 'svg', margin: 1, color: { dark: '#1a1a1a', light: '#fdfcf8' } })
+    response.writeHead(200, { 'content-type': 'image/svg+xml', 'cache-control': 'no-store' }); response.end(svg); return true
+  }
   if (pathname === '/api/analytics/visit' && request.method === 'POST') {
     const { visitorId } = await readJson(request)
     json(response, 200, await store.recordVisit(visitorId))
@@ -76,6 +92,79 @@ const server = http.createServer(async (request, response) => {
     if (!response.headersSent) json(response, 400, { error: error instanceof Error ? error.message : 'Erro inesperado.' })
     else response.end()
   }
+})
+
+const sockets = new WebSocketServer({ noServer: true, maxPayload: 10_000 })
+const socketIdentity = new Map()
+const lastSnapshots = new WeakMap()
+const socketAlive = new WeakMap()
+
+function send(socket, value) { if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(value)) }
+function sendState(socket, snapshot, credentials, force = false) {
+  const previous = lastSnapshots.get(socket)
+  if (force || !previous) send(socket, { type: 'ROOM_STATE', version: snapshot.stateVersion, snapshot, credentials })
+  else {
+    const patch = {}
+    for (const [key, value] of Object.entries(snapshot)) if (JSON.stringify(previous[key]) !== JSON.stringify(value)) patch[key] = value
+    send(socket, { type: 'ROOM_PATCH', version: snapshot.stateVersion, patch })
+  }
+  lastSnapshots.set(socket, snapshot)
+}
+function broadcastRoom(room, event, payload) {
+  for (const client of sockets.clients) {
+    const identity = socketIdentity.get(client)
+    if (identity?.code !== room.code) continue
+    sendState(client, multiplayer.snapshot(room, identity.playerId))
+    send(client, { type: 'ROOM_EVENT', version: room.stateVersion, event, payload })
+  }
+}
+
+multiplayer.on('update', broadcastRoom)
+
+sockets.on('connection', (socket) => {
+  socketAlive.set(socket, true)
+  socket.on('pong', () => socketAlive.set(socket, true))
+  socket.on('message', (buffer) => {
+    let command
+    try {
+      command = JSON.parse(buffer.toString())
+      if (command.type === 'ROOM_CREATE') {
+        const result = multiplayer.createRoom(command.name, command.mode, command.duelVariant, command.maxPlayers)
+        socketIdentity.set(socket, { code: result.room.code, playerId: result.credentials.playerId })
+        sendState(socket, multiplayer.snapshot(result.room, result.credentials.playerId), result.credentials, true); return
+      }
+      if (command.type === 'ROOM_JOIN') {
+        const result = multiplayer.joinRoom(command.code, command.name)
+        socketIdentity.set(socket, { code: result.room.code, playerId: result.credentials.playerId })
+        sendState(socket, multiplayer.snapshot(result.room, result.credentials.playerId), result.credentials, true); return
+      }
+      if (command.type === 'ROOM_RESUME') {
+        const result = multiplayer.resumeRoom(command.code, command.playerId, command.sessionToken)
+        socketIdentity.set(socket, { code: result.room.code, playerId: result.credentials.playerId })
+        sendState(socket, multiplayer.snapshot(result.room, result.credentials.playerId), result.credentials, true); return
+      }
+      const identity = socketIdentity.get(socket)
+      if (!identity) throw new MultiplayerError('IDENTITY_REQUIRED', 'Entra primeiro numa sala.')
+      const room = multiplayer.command(identity.code, identity.playerId, command)
+      sendState(socket, multiplayer.snapshot(room, identity.playerId), undefined, command.type === 'SYNC_STATE')
+    } catch (error) {
+      send(socket, { type: 'ERROR', code: error instanceof MultiplayerError ? error.code : 'INVALID_COMMAND', message: error instanceof Error ? error.message : 'Comando inválido.', actionId: command?.actionId })
+    }
+  })
+  socket.on('close', () => { const identity = socketIdentity.get(socket); if (identity) multiplayer.disconnect(identity.code, identity.playerId); socketIdentity.delete(socket) })
+})
+
+setInterval(() => {
+  for (const socket of sockets.clients) {
+    if (!socketAlive.get(socket)) { socket.terminate(); continue }
+    socketAlive.set(socket, false); socket.ping()
+  }
+}, 30_000).unref()
+
+server.on('upgrade', (request, socket, head) => {
+  const pathname = new URL(request.url ?? '/', 'http://localhost').pathname
+  if (pathname !== '/ws') return socket.destroy()
+  sockets.handleUpgrade(request, socket, head, client => sockets.emit('connection', client, request))
 })
 
 server.listen(port, '0.0.0.0', () => {

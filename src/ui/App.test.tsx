@@ -34,6 +34,14 @@ beforeEach(() => {
     ok: true,
     json: async () => ({ uniqueVisitors: 12, totalVisits: 31, lastVisit: 1_786_572_000_000 }),
   } as Response)))
+  class SocketMock {
+    static OPEN = 1
+    readyState = 0
+    addEventListener() {}
+    close() {}
+    send() {}
+  }
+  vi.stubGlobal('WebSocket', SocketMock)
   repository.loadCustomDecks.mockResolvedValue([])
   repository.loadHistory.mockResolvedValue([])
   repository.loadPreferences.mockResolvedValue(null)
@@ -52,6 +60,16 @@ describe('application workflows', () => {
     expect(screen.getByRole('button', { name: /Histórico/ })).toBeTruthy()
     expect(screen.getByRole('button', { name: /Como jogar/ })).toBeTruthy()
     expect(screen.getByRole('button', { name: /Definições/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Jogar com vários telemóveis/ })).toBeTruthy()
+  })
+
+  it('opens multiplayer without changing the local quick-game entry point', async () => {
+    await renderReadyApp()
+    expect(screen.getByRole('button', { name: 'Partida rápida' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /Jogar com vários telemóveis/ }))
+    expect(screen.getByRole('heading', { name: /Jogar com vários telemóveis/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Criar sala' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Entrar numa sala' })).toBeTruthy()
   })
 
   it('completes quick setup and creates the first playable round', async () => {

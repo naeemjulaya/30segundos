@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { BookOpen, Check, ChevronLeft, CircleHelp, History, LogOut, Minus, Plus, RefreshCw, RotateCcw, Settings, ShieldCheck, Trash2, Users, Volume2, WifiOff, X } from 'lucide-react'
+import { BookOpen, Check, ChevronLeft, CircleHelp, History, LogOut, Minus, Plus, RefreshCw, RotateCcw, Settings, ShieldCheck, Trash2, Users, Volume2, Wifi, WifiOff, X } from 'lucide-react'
 import {
   ADMIN_EMAIL, clearStoredAdmin, getStoredAdmin, isAdminEmail, loadAnalytics, registerVisit, storeAdmin,
 } from '../analytics/analytics'
@@ -15,8 +15,9 @@ import {
   saveCustomDeck, saveHistoryEntry, savePreferences, saveSession,
 } from '../game/infrastructure/sessionRepository'
 import { generateId } from '../shared/generateId'
+import { MultiplayerApp } from './MultiplayerApp'
 
-type Screen = 'home' | 'admin-login' | 'admin' | 'team-count' | 'composition' | 'rules' | 'teams' | 'players' | 'decks' | 'summary' | 'handoff' | 'countdown' | 'round' | 'time-up' | 'review' | 'board' | 'ranking' | 'tiebreak' | 'victory' | 'library' | 'create-deck' | 'history' | 'how-to' | 'settings'
+type Screen = 'home' | 'multiplayer' | 'admin-login' | 'admin' | 'team-count' | 'composition' | 'rules' | 'teams' | 'players' | 'decks' | 'summary' | 'handoff' | 'countdown' | 'round' | 'time-up' | 'review' | 'board' | 'ranking' | 'tiebreak' | 'victory' | 'library' | 'create-deck' | 'history' | 'how-to' | 'settings'
 type SetupMode = 'quick' | 'custom'
 
 const colors: Record<Team['color'], string> = { cyan: '#2e5bff', red: '#ed4b3e', green: '#168c61', amber: '#d99a16', violet: '#6546b8', pink: '#d45482' }
@@ -36,7 +37,8 @@ function SelectField({ label, value, options, onChange }: { label: string; value
 function Toggle({ active, onClick }: { active: boolean; onClick: () => void }) { return <button type="button" className={`switch ${active ? 'on' : ''}`} onClick={onClick} aria-pressed={active}><span /></button> }
 
 export function App() {
-  const [screen, setScreen] = useState<Screen>(() => getStoredAdmin() ? 'admin' : 'home')
+  const joinCode = globalThis.location?.pathname.match(/^\/join\/([A-Z0-9]{4})$/i)?.[1]?.toUpperCase() ?? ''
+  const [screen, setScreen] = useState<Screen>(() => joinCode ? 'multiplayer' : getStoredAdmin() ? 'admin' : 'home')
   const [setupMode, setSetupMode] = useState<SetupMode>('quick')
   const [session, setSession] = useState<GameSession>(() => createSession())
   const [availableDecks, setAvailableDecks] = useState<Deck[]>(initialDecks)
@@ -251,11 +253,13 @@ export function App() {
 
   if (!ready) return <PhoneScreen className="loading"><Logo large /><p>A preparar o baralho…</p></PhoneScreen>
 
+  if (screen === 'multiplayer') return <MultiplayerApp initialCode={joinCode} onExit={() => { globalThis.history?.replaceState(null, '', '/'); setScreen('home') }} />
+
   if (screen === 'admin-login') return <PhoneScreen className="admin-login-screen" back={() => setScreen('home')} eyebrow="Acesso reservado"><div className="admin-login"><ShieldCheck /><h1>Painel<br />administrativo</h1><p className="intro">Nesta versão MVP, apenas o e-mail administrativo configurado pode abrir o painel.</p><form onSubmit={enterAdmin}><label className="text-field"><span>E-mail</span><input type="email" autoComplete="email" value={adminEmail} placeholder="nome@exemplo.com" onChange={(event) => { setAdminEmail(event.target.value); setAdminError('') }} /></label>{adminError && <p className="form-error" role="alert">{adminError}</p>}<PrimaryButton disabled={!adminEmail.trim()}>Entrar</PrimaryButton></form></div></PhoneScreen>
 
   if (screen === 'admin') return <PhoneScreen className="admin-screen" eyebrow="Administração MVP"><div className="admin-header"><div><small>Sessão administrativa</small><h1>Painel</h1><p>{ADMIN_EMAIL}</p></div><button onClick={leaveAdmin} aria-label="Sair do painel"><LogOut /></button></div><div className="admin-stats"><div className="stat"><Users /><strong>{analytics?.uniqueVisitors ?? '—'}</strong><small>Visitantes únicos</small></div><div className="stat"><History /><strong>{analytics?.totalVisits ?? '—'}</strong><small>Acessos registados</small></div></div><div className="admin-note glass-card"><ShieldCheck /><div><b>Métrica do MVP</b><p>Cada navegador recebe um identificador anónimo. Como os jogadores não iniciam sessão, este valor representa dispositivos, não contas verificadas.</p></div></div>{analytics?.lastVisit && <p className="last-visit">Último acesso: {new Date(analytics.lastVisit).toLocaleString('pt-PT')}</p>}{analyticsError && <p className="form-error" role="alert">{analyticsError}</p>}<button className="secondary-button refresh-admin" onClick={refreshAnalytics}><RefreshCw /> Actualizar dados</button></PhoneScreen>
 
-  if (screen === 'home') return <PhoneScreen className="home-screen"><div className="home-hero"><Logo /><FloatingDeck /></div><div className="bottom-stack"><PrimaryButton onClick={() => startSetup('quick')}>Partida rápida</PrimaryButton><button className="secondary-cta" onClick={() => startSetup('custom')}>Personalizar partida</button>{hasSaved && <div className="saved-game glass-card"><button onClick={resumeSaved}><span>Continuar partida</span><b>{session.teams[0]?.name ?? 'Equipa'} · sessão guardada</b></button><button onClick={abandonSaved} aria-label="Abandonar partida"><Trash2 /></button></div>}<nav className="home-nav"><button onClick={() => setScreen('library')}><BookOpen />Baralhos</button><button onClick={() => setScreen('history')}><History />Histórico</button><button onClick={() => setScreen('how-to')}><CircleHelp />Como jogar</button><button onClick={() => setScreen('settings')}><Settings />Definições</button></nav><button className="admin-entry" onClick={() => setScreen('admin-login')}><ShieldCheck /> Administração</button></div></PhoneScreen>
+  if (screen === 'home') return <PhoneScreen className="home-screen"><div className="home-hero"><Logo /><FloatingDeck /></div><div className="bottom-stack"><p className="play-mode-label">Jogar no mesmo telemóvel</p><PrimaryButton onClick={() => startSetup('quick')}>Partida rápida</PrimaryButton><button className="multiplayer-cta" onClick={() => setScreen('multiplayer')}><Wifi /> Jogar com vários telemóveis</button><button className="secondary-cta" onClick={() => startSetup('custom')}>Personalizar partida</button>{hasSaved && <div className="saved-game glass-card"><button onClick={resumeSaved}><span>Continuar partida</span><b>{session.teams[0]?.name ?? 'Equipa'} · sessão guardada</b></button><button onClick={abandonSaved} aria-label="Abandonar partida"><Trash2 /></button></div>}<nav className="home-nav"><button onClick={() => setScreen('library')}><BookOpen />Baralhos</button><button onClick={() => setScreen('history')}><History />Histórico</button><button onClick={() => setScreen('how-to')}><CircleHelp />Como jogar</button><button onClick={() => setScreen('settings')}><Settings />Definições</button></nav><button className="admin-entry" onClick={() => setScreen('admin-login')}><ShieldCheck /> Administração</button></div></PhoneScreen>
 
   if (screen === 'team-count') return <PhoneScreen back={() => setScreen('home')} eyebrow={`${setupMode === 'quick' ? 'Partida rápida' : 'Partida personalizada'} · Equipas`}><h1>Quantas equipas<br />vão jogar?</h1><div className="stepper"><button onClick={() => setTeamCount(session.teams.length - 1)}><Minus /></button><strong>{session.teams.length}</strong><button onClick={() => setTeamCount(session.teams.length + 1)}><Plus /></button></div><div className="team-lights">{Array.from({ length: 6 }, (_, i) => <i key={i} className={i < session.teams.length ? 'on' : ''} style={{ '--team': colors[session.teams[i]?.color ?? 'cyan'] } as React.CSSProperties} />)}</div>{setupMode === 'quick' && <><p className="section-label">Como distribuir os jogadores?</p><div className="two-cards compact"><Card active={session.config.composition === 'balanced'} onClick={() => updateConfig({ composition: 'balanced' })}><EqualIcon /><b>Iguais</b></Card><Card active={session.config.composition === 'dynamic'} onClick={() => updateConfig({ composition: 'dynamic' })}><DynamicIcon /><b>Livre</b></Card></div></>}<PrimaryButton onClick={() => setScreen(setupMode === 'custom' ? 'composition' : 'teams')}>Continuar</PrimaryButton></PhoneScreen>
 
