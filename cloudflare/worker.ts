@@ -86,6 +86,7 @@ export class RoomDurableObject extends DurableObject<Env> {
     const attachment = socket.deserializeAttachment() as SocketAttachment | null
     if (!attachment) return socket.close(1008, 'Identidade inválida')
     try {
+      if ((typeof raw === 'string' ? raw.length : raw.byteLength) > 10_000) throw new MultiplayerError('REQUEST_TOO_LARGE', 'Pedido demasiado grande.')
       const command = JSON.parse(typeof raw === 'string' ? raw : new TextDecoder().decode(raw)) as ClientCommand
       if (command.type === 'ROOM_CREATE' || command.type === 'ROOM_JOIN' || command.type === 'ROOM_RESUME') throw new MultiplayerError('INVALID_COMMAND', 'Comando inválido neste canal.')
       const room = this.requireRoom(); this.service.command(room.code, attachment.playerId, command)

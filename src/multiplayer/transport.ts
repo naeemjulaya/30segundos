@@ -29,6 +29,7 @@ export class WebSocketTransport implements MultiplayerTransport {
   private reconnectAttempt = 0
   private reconnectTimer: number | null = null
   private closed = false
+  private bootstrapping = false
 
   connect() {
     this.closed = false
@@ -51,6 +52,8 @@ export class WebSocketTransport implements MultiplayerTransport {
   close() { this.closed = true; if (this.reconnectTimer) clearTimeout(this.reconnectTimer); this.socket?.close(); this.socket = null }
 
   private async bootstrap(command: Extract<CommandInput, { type: 'ROOM_CREATE' | 'ROOM_JOIN' }>) {
+    if (this.bootstrapping) return
+    this.bootstrapping = true
     try {
       const endpoint = command.type === 'ROOM_CREATE' ? '/api/rooms' : `/api/rooms/${command.code}/join`
       const body = command.type === 'ROOM_CREATE'
@@ -59,29 +62,33 @@ export class WebSocketTransport implements MultiplayerTransport {
       const response = await fetch(backendUrl(endpoint), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
       const value = await response.json() as { snapshot?: RoomSnapshot; credentials?: RoomCredentials; error?: string; code?: string }
       if (!response.ok || !value.snapshot || !value.credentials) throw new Error(value.error ?? 'Não foi possível entrar na sala.')
+      if (this.reconnectTimer) { clearTimeout(this.reconnectTimer); this.reconnectTimer = null }
+      const previousSocket = this.socket; this.socket = null; previousSocket?.close()
       saveRoomCredentials(value.credentials)
       this.emit({ type: 'ROOM_STATE', version: value.snapshot.stateVersion, snapshot: value.snapshot, credentials: value.credentials })
       this.openSocket(value.credentials)
     } catch (error) {
       this.emit({ type: 'ERROR', code: 'CONNECTION_ERROR', message: error instanceof Error ? error.message : 'Não foi possível ligar ao servidor.' })
-    }
+    } finally { this.bootstrapping = false }
   }
 
   private openSocket(credentials: RoomCredentials) {
     if (this.socket?.readyState === WebSocket.OPEN || this.socket?.readyState === WebSocket.CONNECTING) return
-    this.socket = new WebSocket(backendWebSocketUrl(`/ws/${credentials.roomCode}?playerId=${encodeURIComponent(credentials.playerId)}&token=${encodeURIComponent(credentials.sessionToken)}`))
-    this.socket.addEventListener('open', () => {
+    const socket = new WebSocket(backendWebSocketUrl(`/ws/${credentials.roomCode}?playerId=${encodeURIComponent(credentials.playerId)}&token=${encodeURIComponent(credentials.sessionToken)}`))
+    this.socket = socket
+    socket.addEventListener('open', () => {
       this.reconnectAttempt = 0
-      for (const message of this.queue.splice(0)) this.socket?.send(message)
+      for (const message of this.queue.splice(0)) socket.send(message)
     })
-    this.socket.addEventListener('message', event => {
+    socket.addEventListener('message', event => {
       try {
         const message = JSON.parse(String(event.data)) as ServerMessage
         if (message.type === 'ROOM_STATE' && message.credentials) saveRoomCredentials(message.credentials)
         this.emit(message)
       } catch { this.emit({ type: 'ERROR', code: 'INVALID_MESSAGE', message: 'O servidor enviou uma resposta inválida.' }) }
     })
-    this.socket.addEventListener('close', () => {
+    socket.addEventListener('close', () => {
+      if (this.socket !== socket) return
       this.socket = null
       if (this.closed || !loadRoomCredentials()) return
       const delay = Math.min(10_000, 500 * 2 ** this.reconnectAttempt++)
