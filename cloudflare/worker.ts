@@ -38,13 +38,20 @@ export class RoomDurableObject extends DurableObject<Env> {
   private service = new MultiplayerService(null, () => Date.now(), false)
   private room: GameRoom | null = null
   private snapshots = new WeakMap<WebSocket, RoomSnapshot>()
+  private alarmAt: number | null = null
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env)
     ctx.blockConcurrencyWhile(async () => {
       this.ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS room_state (id INTEGER PRIMARY KEY CHECK (id = 1), json TEXT NOT NULL)')
-      const saved = this.ctx.storage.sql.exec<{ json: string }>('SELECT json FROM room_state WHERE id = 1').toArray()[0]
-      if (saved) this.room = this.service.restoreRoom(JSON.parse(saved.json) as GameRoom)
+      const [stored, alarmAt] = await Promise.all([
+        this.ctx.storage.get<GameRoom>('room'),
+        this.ctx.storage.getAlarm(),
+      ])
+      const legacy = stored ? null : this.ctx.storage.sql.exec<{ json: string }>('SELECT json FROM room_state WHERE id = 1').toArray()[0]
+      if (stored) this.room = this.service.restoreRoom(stored)
+      else if (legacy) this.room = this.service.restoreRoom(JSON.parse(legacy.json) as GameRoom)
+      this.alarmAt = alarmAt
     })
   }
 
@@ -100,12 +107,14 @@ export class RoomDurableObject extends DurableObject<Env> {
   async webSocketError(socket: WebSocket) { await this.disconnect(socket) }
 
   async alarm() {
+    this.alarmAt = null
     const room = this.room
     if (!room) return
     this.service.processDue(room)
     if (room.status === 'CLOSED' || room.expiresAt <= Date.now()) {
       for (const socket of this.ctx.getWebSockets()) socket.close(1000, 'Sala expirada')
       this.ctx.storage.sql.exec('DELETE FROM room_state')
+      this.ctx.waitUntil(this.ctx.storage.delete('room', { allowUnconfirmed: true }).catch(error => this.logPersistenceError(error)))
       this.room = null
       return
     }
@@ -124,10 +133,19 @@ export class RoomDurableObject extends DurableObject<Env> {
     await this.persist(); this.broadcast()
   }
 
-  private async persist() {
+  private persist() {
     if (!this.room) return
-    this.ctx.storage.sql.exec('INSERT INTO room_state (id, json) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET json = excluded.json', JSON.stringify(this.room))
-    await this.ctx.storage.setAlarm(this.service.nextDeadline(this.room))
+    const snapshot = structuredClone(this.room)
+    this.ctx.waitUntil(this.ctx.storage.put('room', snapshot, { allowUnconfirmed: true }).catch(error => this.logPersistenceError(error)))
+    const deadline = this.service.nextDeadline(this.room)
+    if (this.alarmAt === null || deadline < this.alarmAt) {
+      this.alarmAt = deadline
+      this.ctx.waitUntil(this.ctx.storage.setAlarm(deadline, { allowUnconfirmed: true }).catch(error => this.logPersistenceError(error)))
+    }
+  }
+
+  private logPersistenceError(error: unknown) {
+    console.error(JSON.stringify({ message: 'room_persistence_failed', roomCode: this.room?.code, error: error instanceof Error ? error.message : String(error) }))
   }
 
   private broadcast(except?: WebSocket) {
@@ -177,8 +195,12 @@ export default {
         const body = await boundedJson<{ name: string; mode: RoomMode; duelVariant?: 'ALTERNATING' | 'DUEL'; maxPlayers?: number }>(request)
         for (let attempt = 0; attempt < 8; attempt++) {
           const code = roomCode(); const stub = env.ROOMS.getByName(code)
-          if (await stub.exists()) continue
-          return withCors(Response.json(await stub.create(code, body.name, body.mode, body.duelVariant ?? 'ALTERNATING', body.maxPlayers ?? 8)), request, env)
+          try {
+            return withCors(Response.json(await stub.create(code, body.name, body.mode, body.duelVariant ?? 'ALTERNATING', body.maxPlayers ?? 8)), request, env)
+          } catch (error) {
+            if (error instanceof Error && (error.message.includes('ROOM_EXISTS') || error.message.includes('já existe'))) continue
+            throw error
+          }
         }
         throw new Error('Não foi possível criar um código de sala.')
       }

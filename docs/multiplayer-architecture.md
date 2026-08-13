@@ -28,6 +28,8 @@ Ao criar, entrar, recuperar a sessão ou pedir `SYNC_STATE`, o cliente recebe `R
 
 O servidor envia `serverNow`, `roundEndsAt` e não envia contagens por segundo. O cliente calcula a diferença entre relógios; o servidor valida o prazo real. Heartbeats detectam sockets que ficaram silenciosamente inactivos, enquanto o cliente reconecta com backoff exponencial e `sessionToken`.
 
+Para reduzir a latência percebida, acertos, passes e o indicador de pronto são apresentados de forma optimista no dispositivo que actuou. Isto não altera a autoridade: o servidor valida o comando, o patch seguinte reconcilia o cliente e qualquer rejeição provoca um `SYNC_STATE`. Criação e entrada mantêm confirmação autoritativa e mostram um estado de ligação para impedir pedidos duplicados.
+
 ## Privacidade e autorização
 
 Durante `ROUND_ACTIVE`, apenas o snapshot do explicador contém `round.words`. Colegas e adversários recebem apenas equipa, explicador, estado e timestamps. Na revisão, todos recebem os resultados. Tokens de sessão e a lista de acções processadas nunca entram no snapshot público.
@@ -38,7 +40,9 @@ O servidor valida host, pertença à sala, fase, explicador, palavra, prazo, pas
 
 Uma queda marca `DISCONNECTED` sem remover o jogador. Se for o explicador, a ronda guarda o tempo restante e pausa; ao regressar, continua o mesmo cartão. Depois de 15 segundos, o host pode encerrar a ronda pausada. Se o host não voltar, o servidor transfere deterministicamente o papel ao participante ligado há mais tempo.
 
-Localmente, salas são gravadas atomicamente em `.data/rooms.json`. Em produção, cada código é encaminhado deterministicamente para um Durable Object próprio, cujo SQLite guarda o estado autoritativo. WebSockets usam Hibernation e attachments para recuperar o jogador após o objecto sair da memória. Alarms encerram rondas, transferem o host e expiram salas sem depender de `setTimeout`. O frontend Vercel comunica directamente com o Worker através de CORS restrito ao domínio de produção.
+Localmente, salas são gravadas atomicamente em `.data/rooms.json`. Em produção, cada código é encaminhado deterministicamente para um Durable Object próprio, cujo armazenamento SQLite guarda o estado autoritativo. WebSockets usam Hibernation e attachments para recuperar o jogador após o objecto sair da memória. Alarms encerram rondas, transferem o host e expiram salas sem depender de `setTimeout`. O frontend Vercel comunica directamente com o Worker através de CORS restrito ao domínio de produção.
+
+As mutações iniciam a gravação durável antes do broadcast, mas usam `allowUnconfirmed` com a promessa entregue a `waitUntil`, para não adicionar o tempo de flush do disco a cada mensagem. O alarme só é regravado quando surge um prazo anterior ao já agendado. Uma falha de persistência é registada de forma estruturada. A localização da sala não é fixada: o Cloudflare aproxima o Durable Object do primeiro pedido real, que normalmente é o criador da sala.
 
 ## 1 vs 1
 
