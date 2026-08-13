@@ -119,11 +119,16 @@ describe('application workflows', () => {
 
   it('renders history, instructions and changes local settings', async () => {
     await renderReadyApp()
+    expect(screen.getByRole('button', { name: 'Abrir tutorial' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: /Histórico/ }))
     expect(screen.getByText('Ainda não há partidas')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Voltar' }))
-    fireEvent.click(screen.getByRole('button', { name: /Como jogar/ }))
-    expect(screen.getByText('Forma equipas')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Abrir tutorial' }))
+    expect(screen.getByText('Prepara a partida')).toBeTruthy()
+    expect(screen.getByText(/explica sem dizer directamente/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('tab', { name: /Vários telemóveis/ }))
+    expect(screen.getByText('Cria uma sala')).toBeTruthy()
+    expect(screen.getByText('O cartão é privado')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Voltar' }))
     fireEvent.click(screen.getByRole('button', { name: /Definições/ }))
     const toggles = screen.getAllByRole('button').filter((button) => button.classList.contains('switch'))

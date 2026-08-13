@@ -583,6 +583,28 @@ h1 {
 .home-nav button:nth-child(3) { background: #d8e3d7; }
 .home-nav button:nth-child(4) { background: #e6dbee; }
 .home-nav svg { width: 17px; height: 17px; }
+.tutorial-fab {
+  position: fixed;
+  right: max(14px, env(safe-area-inset-right));
+  top: max(18px, env(safe-area-inset-top));
+  z-index: 30;
+  min-height: 50px;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  color: var(--ink);
+  background: var(--mustard);
+  box-shadow: 5px 5px 0 var(--ink);
+  font: 700 15px/1 'Barlow Condensed';
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.tutorial-fab:hover { transform: translateY(-2px); }
+.tutorial-fab:active { transform: translate(4px, 4px); box-shadow: 1px 1px 0 var(--ink); }
+.tutorial-fab svg { width: 21px; height: 21px; }
 
 .stepper { height: auto; min-height: 170px; margin: 16px 0 6px; border-top: 4px solid var(--ink); border-bottom: 4px solid var(--ink); }
 .stepper button, .mini-stepper button {
@@ -831,6 +853,33 @@ h1 {
 .instruction-list > .glass-card > strong { color: var(--tomato); font-size: 48px; }
 .instruction-list b, .settings-list b { color: var(--ink); font: 700 21px 'Barlow Condensed'; }
 .instruction-list p, .settings-list small { color: var(--ink-soft); font-size: 11px; }
+.tutorial-screen { background: #e9e4dc; }
+.tutorial-screen .screen-content { width: min(100%, 920px); }
+.tutorial-hero { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 16px; align-items: start; margin: 8px 0 22px; }
+.tutorial-hero > svg { width: 52px; height: 52px; padding: 9px; border: 3px solid var(--ink); color: var(--paper); background: var(--blue); box-shadow: 4px 4px 0 var(--ink); }
+.tutorial-hero h1 { margin: 0; font-size: clamp(48px, 13vw, 76px); line-height: .9; }
+.tutorial-hero p { max-width: 620px; margin: 12px 0 0; color: var(--ink-soft); font-size: 13px; line-height: 1.55; }
+.tutorial-mode-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 18px; }
+.tutorial-mode-tabs button { min-height: 62px; padding: 10px; display: flex; align-items: center; justify-content: center; gap: 7px; border: 2px solid var(--ink); color: var(--ink); background: var(--paper); font-weight: 800; }
+.tutorial-mode-tabs button.active { color: var(--paper); background: var(--ink); box-shadow: 4px 4px 0 var(--mustard); }
+.tutorial-mode-tabs svg { width: 18px; }
+.tutorial-steps { display: grid; gap: 10px; }
+.tutorial-steps .glass-card { min-height: 104px; padding: 14px; display: grid; grid-template-columns: 58px minmax(0, 1fr); align-items: center; gap: 12px; text-align: left; }
+.tutorial-steps > .glass-card > strong { font-size: 44px; line-height: 1; }
+.tutorial-steps b { display: block; margin-bottom: 5px; }
+.tutorial-steps p { margin: 0; font-size: 12px; line-height: 1.5; }
+.tutorial-rules { margin: 22px 0; padding: 16px; border: 3px solid var(--ink); background: #f5d97e; box-shadow: 5px 5px 0 var(--ink); }
+.tutorial-rules h2 { margin: 0 0 12px; font: 700 28px/1 'Barlow Condensed'; text-transform: uppercase; }
+.tutorial-rules > div { min-height: 48px; display: grid; grid-template-columns: 32px minmax(0, 1fr); align-items: center; gap: 9px; border-top: 2px solid rgba(26, 26, 26, .25); }
+.tutorial-rules > div > svg, .tutorial-rules > div > span { width: 28px; height: 28px; display: grid; place-items: center; color: var(--paper); background: var(--ink); }
+.tutorial-rules p { margin: 7px 0; font-size: 12px; line-height: 1.4; }
+.tutorial-actions { display: grid; gap: 10px; margin-bottom: 20px; }
+
+@media (min-width: 700px) {
+  .tutorial-fab { right: 28px; top: 28px; }
+  .tutorial-steps { grid-template-columns: 1fr 1fr; }
+  .tutorial-steps .glass-card:last-child:nth-child(odd) { grid-column: 1 / -1; }
+}
 .settings-list svg, .vibration { color: var(--blue); }
 .settings-list em { color: var(--green); font-weight: 700; }
 .switch { border: 2px solid var(--ink); border-radius: 3px; background: #c9c4bc; }
