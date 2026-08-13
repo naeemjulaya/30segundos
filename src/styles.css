@@ -922,6 +922,9 @@ h1 {
 .remove-player svg { width: 14px; }
 .distribution-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .cancel-room { width: 100%; margin-top: 5px; color: var(--tomato); }
+.multiplayer-exit { position: fixed; top: max(18px, env(safe-area-inset-top)); right: clamp(14px, 2.4vw, 34px); z-index: 20; width: 46px; height: 46px; display: grid; place-items: center; border: 2px solid var(--ink); color: var(--paper); background: var(--tomato); box-shadow: 4px 4px 0 var(--ink); }
+.multiplayer-exit:active { transform: translate(3px, 3px); box-shadow: 1px 1px 0 var(--ink); }
+.multiplayer-exit svg { width: 21px; }
 .versus-card, .spectator-state { margin: auto 0; padding: 28px; border: 3px solid var(--ink); color: var(--ink); background: var(--mustard); box-shadow: 7px 7px 0 var(--ink); text-align: center; }
 .versus-card b { font: 700 30px 'Barlow Condensed'; text-transform: uppercase; }
 .multiplayer-turn .primary-button { margin-top: auto; }
