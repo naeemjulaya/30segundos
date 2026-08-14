@@ -29,6 +29,24 @@ function withCors(response: Response, request: Request, env: Env) {
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers })
 }
 
+function trustedBrowserRequest(request: Request, env: Env) {
+  const origin = request.headers.get('Origin')
+  return Boolean(origin && allowedOrigin(request, env) === origin)
+}
+
+async function withinRateLimit(binding: RateLimit, request: Request, scope: string) {
+  const client = request.headers.get('cf-connecting-ip') ?? 'unknown'
+  const [locationBudget, clientBudget] = await Promise.all([
+    binding.limit({ key: `${scope}:location` }),
+    binding.limit({ key: `${scope}:client:${client}` }),
+  ])
+  return locationBudget.success && clientBudget.success
+}
+
+function rejectedMutation(request: Request, env: Env, status: 403 | 429, error: string) {
+  return withCors(Response.json({ error }, { status }), request, env)
+}
+
 async function boundedJson<T>(request: Request): Promise<T> {
   if (Number(request.headers.get('content-length') ?? 0) > 10_000) throw new MultiplayerError('REQUEST_TOO_LARGE', 'Pedido demasiado grande.')
   return request.json<T>()
@@ -43,14 +61,11 @@ export class RoomDurableObject extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env)
     ctx.blockConcurrencyWhile(async () => {
-      this.ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS room_state (id INTEGER PRIMARY KEY CHECK (id = 1), json TEXT NOT NULL)')
       const [stored, alarmAt] = await Promise.all([
         this.ctx.storage.get<GameRoom>('room'),
         this.ctx.storage.getAlarm(),
       ])
-      const legacy = stored ? null : this.ctx.storage.sql.exec<{ json: string }>('SELECT json FROM room_state WHERE id = 1').toArray()[0]
       if (stored) this.room = this.service.restoreRoom(stored)
-      else if (legacy) this.room = this.service.restoreRoom(JSON.parse(legacy.json) as GameRoom)
       this.alarmAt = alarmAt
     })
   }
@@ -107,8 +122,17 @@ export class RoomDurableObject extends DurableObject<Env> {
       if ((typeof raw === 'string' ? raw.length : raw.byteLength) > 10_000) throw new MultiplayerError('REQUEST_TOO_LARGE', 'Pedido demasiado grande.')
       const command = JSON.parse(typeof raw === 'string' ? raw : new TextDecoder().decode(raw)) as ClientCommand
       if (command.type === 'ROOM_CREATE' || command.type === 'ROOM_JOIN' || command.type === 'ROOM_RESUME') throw new MultiplayerError('INVALID_COMMAND', 'Comando inválido neste canal.')
-      const room = this.requireRoom(); this.service.command(room.code, attachment.playerId, command)
-      await this.persist(); this.broadcast()
+      const room = this.requireRoom(); const previousVersion = room.stateVersion
+      this.service.command(room.code, attachment.playerId, command)
+      if (room.stateVersion === previousVersion) {
+        if (command.type === 'SYNC_STATE') {
+          const snapshot = this.service.snapshot(room, attachment.playerId)
+          socket.send(JSON.stringify({ type: 'ROOM_STATE', version: snapshot.stateVersion, snapshot }))
+          this.snapshots.set(socket, snapshot)
+        }
+        return
+      }
+      this.persist(); this.broadcast()
     } catch (error) {
       socket.send(JSON.stringify({ type: 'ERROR', code: error instanceof MultiplayerError ? error.code : 'INVALID_COMMAND', message: error instanceof Error ? error.message : 'Comando inválido.' }))
     }
@@ -121,15 +145,15 @@ export class RoomDurableObject extends DurableObject<Env> {
     this.alarmAt = null
     const room = this.room
     if (!room) return
-    this.service.processDue(room)
+    const changed = this.service.processDue(room)
     if (room.status === 'CLOSED' || room.expiresAt <= Date.now()) {
       for (const socket of this.ctx.getWebSockets()) socket.close(1000, 'Sala expirada')
-      this.ctx.storage.sql.exec('DELETE FROM room_state')
       this.ctx.waitUntil(this.ctx.storage.delete('room', { allowUnconfirmed: true }).catch(error => this.logPersistenceError(error)))
       this.room = null
       return
     }
-    await this.persist(); this.broadcast()
+    if (changed) { this.persist(); this.broadcast() }
+    else this.scheduleAlarm()
   }
 
   private requireRoom() {
@@ -148,6 +172,11 @@ export class RoomDurableObject extends DurableObject<Env> {
     if (!this.room) return
     const snapshot = structuredClone(this.room)
     this.ctx.waitUntil(this.ctx.storage.put('room', snapshot, { allowUnconfirmed: true }).catch(error => this.logPersistenceError(error)))
+    this.scheduleAlarm()
+  }
+
+  private scheduleAlarm() {
+    if (!this.room) return
     const deadline = this.service.nextDeadline(this.room)
     if (this.alarmAt === null || deadline < this.alarmAt) {
       this.alarmAt = deadline
@@ -203,6 +232,8 @@ export default {
     try {
       const createMatch = url.pathname === '/api/rooms' && request.method === 'POST'
       if (createMatch) {
+        if (!trustedBrowserRequest(request, env)) return rejectedMutation(request, env, 403, 'Origem não autorizada.')
+        if (!await withinRateLimit(env.ROOM_CREATE_RATE_LIMITER, request, 'room:create')) return rejectedMutation(request, env, 429, 'Muitas salas criadas. Aguarda um minuto.')
         const body = await boundedJson<{ name: string; mode: RoomMode; duelVariant?: 'ALTERNATING' | 'DUEL'; maxPlayers?: number }>(request)
         for (let attempt = 0; attempt < 8; attempt++) {
           const code = roomCode(); const stub = env.ROOMS.getByName(code)
@@ -217,32 +248,41 @@ export default {
       }
       const joinMatch = url.pathname.match(/^\/api\/rooms\/([A-Z0-9]{4})\/join$/)
       if (joinMatch && request.method === 'POST') {
+        if (!trustedBrowserRequest(request, env)) return rejectedMutation(request, env, 403, 'Origem não autorizada.')
+        if (!await withinRateLimit(env.ROOM_ACTION_RATE_LIMITER, request, 'room:join')) return rejectedMutation(request, env, 429, 'Muitas tentativas. Aguarda um minuto.')
         const body = await boundedJson<{ name: string }>(request)
         return withCors(Response.json(await env.ROOMS.getByName(joinMatch[1]).join(body.name)), request, env)
       }
       const leaveMatch = url.pathname.match(/^\/api\/rooms\/([A-Z0-9]{4})\/leave$/)
       if (leaveMatch && request.method === 'POST') {
+        if (!trustedBrowserRequest(request, env)) return rejectedMutation(request, env, 403, 'Origem não autorizada.')
+        if (!await withinRateLimit(env.ROOM_ACTION_RATE_LIMITER, request, 'room:leave')) return rejectedMutation(request, env, 429, 'Muitas tentativas. Aguarda um minuto.')
         const body = await boundedJson<{ playerId: string; sessionToken: string }>(request)
         return withCors(Response.json(await env.ROOMS.getByName(leaveMatch[1]).leave(body.playerId, body.sessionToken)), request, env)
       }
       const wsMatch = url.pathname.match(/^\/ws\/([A-Z0-9]{4})$/)
       if (wsMatch) {
-        const origin = request.headers.get('Origin')
-        if (origin && allowedOrigin(request, env) !== origin) return Response.json({ error: 'Origem não autorizada.' }, { status: 403 })
+        if (!trustedBrowserRequest(request, env)) return Response.json({ error: 'Origem não autorizada.' }, { status: 403 })
+        if (!await withinRateLimit(env.ROOM_ACTION_RATE_LIMITER, request, 'room:websocket')) return Response.json({ error: 'Muitas tentativas. Aguarda um minuto.' }, { status: 429 })
         return env.ROOMS.getByName(wsMatch[1]).fetch(request)
       }
       const qrMatch = url.pathname.match(/^\/api\/rooms\/([A-Z0-9]{4})\/qr\.svg$/)
       if (qrMatch && request.method === 'GET') {
-        const room = env.ROOMS.getByName(qrMatch[1]); if (!await room.exists()) return withCors(Response.json({ error: 'Sala não encontrada.' }, { status: 404 }), request, env)
         const svg = await QRCode.toString(`${env.FRONTEND_ORIGIN}/join/${qrMatch[1]}`, { type: 'svg', margin: 1, color: { dark: '#1a1a1a', light: '#fdfcf8' } })
         return withCors(new Response(svg, { headers: { 'content-type': 'image/svg+xml', 'cache-control': 'no-store' } }), request, env)
       }
       const analytics = env.ANALYTICS.getByName('global')
       if (url.pathname === '/api/analytics/visit' && request.method === 'POST') {
+        if (!trustedBrowserRequest(request, env)) return rejectedMutation(request, env, 403, 'Origem não autorizada.')
+        if (!await withinRateLimit(env.ANALYTICS_RATE_LIMITER, request, 'analytics:visit')) return rejectedMutation(request, env, 429, 'Limite temporário de registos atingido.')
         const body = await boundedJson<{ visitorId: string }>(request)
         return withCors(Response.json(await analytics.record(body.visitorId)), request, env)
       }
-      if (url.pathname === '/api/analytics/summary' && request.method === 'GET') return withCors(Response.json(await analytics.summary()), request, env)
+      if (url.pathname === '/api/analytics/summary' && request.method === 'GET') {
+        if (!trustedBrowserRequest(request, env)) return rejectedMutation(request, env, 403, 'Origem não autorizada.')
+        if (!await withinRateLimit(env.ANALYTICS_RATE_LIMITER, request, 'analytics:summary')) return rejectedMutation(request, env, 429, 'Muitas consultas. Aguarda um minuto.')
+        return withCors(Response.json(await analytics.summary()), request, env)
+      }
       if (url.pathname === '/health') return withCors(Response.json({ ok: true, service: 'trinta-segundos-multiplayer' }), request, env)
       return withCors(Response.json({ error: 'Endpoint não encontrado.' }, { status: 404 }), request, env)
     } catch (error) {

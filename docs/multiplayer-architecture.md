@@ -48,6 +48,10 @@ Localmente, salas são gravadas atomicamente em `.data/rooms.json`. Em produçã
 
 As mutações iniciam a gravação durável antes do broadcast, mas usam `allowUnconfirmed` com a promessa entregue a `waitUntil`, para não adicionar o tempo de flush do disco a cada mensagem. O alarme só é regravado quando surge um prazo anterior ao já agendado. Uma falha de persistência é registada de forma estruturada. A localização da sala não é fixada: o Cloudflare aproxima o Durable Object do primeiro pedido real, que normalmente é o criador da sala.
 
+Para respeitar a quota do plano gratuito, `SYNC_STATE` e acções idempotentes sem mudança respondem a partir da memória sem regravar a sala. Um alarme que dispara sem alterar o domínio agenda apenas o próximo prazo. O QR Code é uma representação determinística do deep link e é gerado sem instanciar um Durable Object; a entrada continua a validar a existência da sala.
+
+As mutações HTTP, ligações WebSocket e consultas administrativas aceitam apenas o frontend oficial ou origens locais de desenvolvimento. Rate Limiting no edge limita, por localização e cliente, a criação de salas (5/minuto), entrada/saída/reconexão (30/minuto) e registo ou consulta analítica (10/minuto). Pedidos bloqueados recebem `403` ou `429` antes de invocar armazenamento durável, isolando o jogo de abuso ao contador e de criação automática de salas.
+
 ## 1 vs 1
 
 A interface fala em jogadores, embora internamente cada pessoa ocupe uma equipa de um elemento para reutilizar pontuação, vitória e turnos. Em **Alternado**, cada jogador explica uma ronda; em **Duelo**, cada jogador explica duas. Os dois confirmam a revisão. Numa contestação, ambos votam; um empate 1–1 anula a palavra (`wrong`).
